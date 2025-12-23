@@ -64,7 +64,7 @@ jobs:
             console.log('PR description validation passed!');
 
   label:
-    needs: [validate-pr-title, validate-pr-description]
+    needs: [validate-pr-title]
     name: Label PR
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.user.type != 'Bot'}}
