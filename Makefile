@@ -10,6 +10,8 @@ ifneq (,$(wildcard .env))
   $(foreach var,$(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' .env),$(eval $(var):=$(shell echo $($(var)) | sed "s/^'//;s/'$$//")))
 endif
 
+hostname ?= 0.0.0.0
+
 .PHONY: help dev dev-cpu dev-local infra stop clean build logs shell-backend shell-frontend install \
        test test-integration test-ci test-ci-local test-sdk \
        backend frontend install-be install-fe build-be build-fe logs-be logs-fe logs-lf logs-os \
@@ -53,9 +55,12 @@ help:
 	@echo ""
 
 # Development environments
+# Use centralized env file from TUI if it exists, otherwise fall back to local .env
+OPENRAG_ENV_FILE := $(shell if [ -f ~/.openrag/tui/.env ]; then echo "--env-file ~/.openrag/tui/.env"; fi)
+
 dev:
 	@echo "🚀 Starting OpenRAG with GPU support..."
-	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+	docker compose $(OPENRAG_ENV_FILE) -f docker-compose.yml -f docker-compose.gpu.yml up -d
 	@echo "✅ Services started!"
 	@echo "   Backend: http://localhost:8000"
 	@echo "   Frontend: http://localhost:3000"
@@ -65,7 +70,7 @@ dev:
 
 dev-cpu:
 	@echo "🚀 Starting OpenRAG with CPU only..."
-	docker compose up -d
+	docker compose $(OPENRAG_ENV_FILE) up -d
 	@echo "✅ Services started!"
 	@echo "   Backend: http://localhost:8000"
 	@echo "   Frontend: http://localhost:3000"
@@ -75,7 +80,7 @@ dev-cpu:
 
 dev-local:
 	@echo "🔧 Starting infrastructure only (for local development)..."
-	docker compose up -d opensearch dashboards langflow
+	docker compose $(OPENRAG_ENV_FILE) up -d opensearch dashboards langflow
 	@echo "✅ Infrastructure started!"
 	@echo "   Langflow: http://localhost:7860"
 	@echo "   OpenSearch: http://localhost:9200"
@@ -85,7 +90,7 @@ dev-local:
 
 infra:
 	@echo "🔧 Starting infrastructure services only..."
-	docker compose up -d opensearch dashboards langflow
+	docker compose $(OPENRAG_ENV_FILE) up -d opensearch dashboards langflow
 	@echo "✅ Infrastructure services started!"
 	@echo "   Langflow: http://localhost:7860"
 	@echo "   OpenSearch: http://localhost:9200"
@@ -93,7 +98,7 @@ infra:
 
 infra-cpu:
 	@echo "🔧 Starting infrastructure services only..."
-	docker compose up -d opensearch dashboards langflow
+	docker compose $(OPENRAG_ENV_FILE) up -d opensearch dashboards langflow
 	@echo "✅ Infrastructure services started!"
 	@echo "   Langflow: http://localhost:7860"
 	@echo "   OpenSearch: http://localhost:9200"
@@ -102,13 +107,13 @@ infra-cpu:
 # Container management
 stop:
 	@echo "🛑 Stopping all containers..."
-	docker compose down
+	docker compose $(OPENRAG_ENV_FILE) down
 
 restart: stop dev
 
 clean: stop
 	@echo "🧹 Cleaning up containers and volumes..."
-	docker compose down -v --remove-orphans
+	docker compose $(OPENRAG_ENV_FILE) down -v --remove-orphans
 	docker system prune -f
 
 # Local development
@@ -120,7 +125,8 @@ backend:
 frontend:
 	@echo "⚛️  Starting frontend locally..."
 	@if [ ! -d "frontend/node_modules" ]; then echo "📦 Installing frontend dependencies first..."; cd frontend && npm install; fi
-	cd frontend && npx next dev
+	cd frontend && npx next dev \
+		--hostname $(hostname)
 
 # Installation
 install: install-be install-fe
@@ -128,7 +134,7 @@ install: install-be install-fe
 
 install-be:
 	@echo "📦 Installing backend dependencies..."
-	uv sync --extra torch-cu128
+	uv sync
 
 install-fe:
 	@echo "📦 Installing frontend dependencies..."
@@ -153,36 +159,36 @@ build-fe:
 # Logging and debugging
 logs:
 	@echo "📋 Showing all container logs..."
-	docker compose logs -f
+	docker compose $(OPENRAG_ENV_FILE) logs -f
 
 logs-be:
 	@echo "📋 Showing backend logs..."
-	docker compose logs -f openrag-backend
+	docker compose $(OPENRAG_ENV_FILE) logs -f openrag-backend
 
 logs-fe:
 	@echo "📋 Showing frontend logs..."
-	docker compose logs -f openrag-frontend
+	docker compose $(OPENRAG_ENV_FILE) logs -f openrag-frontend
 
 logs-lf:
 	@echo "📋 Showing langflow logs..."
-	docker compose logs -f langflow
+	docker compose $(OPENRAG_ENV_FILE) logs -f langflow
 
 logs-os:
 	@echo "📋 Showing opensearch logs..."
-	docker compose logs -f opensearch
+	docker compose $(OPENRAG_ENV_FILE) logs -f opensearch
 
 # Shell access
 shell-be:
 	@echo "🐚 Opening shell in backend container..."
-	docker compose exec openrag-backend /bin/bash
+	docker compose $(OPENRAG_ENV_FILE) exec openrag-backend /bin/bash
 
 shell-lf:
 	@echo "🐚 Opening shell in langflow container..."
-	docker compose exec langflow /bin/bash
+	docker compose $(OPENRAG_ENV_FILE) exec langflow /bin/bash
 
 shell-os:
 	@echo "🐚 Opening shell in opensearch container..."
-	docker compose exec opensearch /bin/bash
+	docker compose $(OPENRAG_ENV_FILE) exec opensearch /bin/bash
 
 # Testing and quality
 test:
@@ -414,7 +420,7 @@ lint:
 # Service status
 status:
 	@echo "📊 Container status:"
-	@docker compose ps 2>/dev/null || echo "No containers running"
+	@docker compose $(OPENRAG_ENV_FILE) ps 2>/dev/null || echo "No containers running"
 
 health:
 	@echo "🏥 Health check:"
