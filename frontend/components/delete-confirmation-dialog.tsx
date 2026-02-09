@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { ReactElement } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,27 +21,30 @@ import { AlertTriangle } from "lucide-react";
 export function formatFilesToDelete(
   files: Array<{ filename: string }>,
   maxVisible = 5,
-): string {
+): ReactElement {
   const visibleFiles = files.slice(0, maxVisible);
   const remainingCount = files.length - maxVisible;
-  const fileList = visibleFiles.map((file) => `• ${file.filename}`).join("\n");
-  return remainingCount > 0
-    ? `${fileList}\n• ... and ${remainingCount} more document${
+  return (
+    <ul className="list-disc list-inside max-w-[29rem] sm:max-w-[calc(425px-3rem)]">
+      {visibleFiles.map((file) => <li className="my-2 truncate">{file.filename}</li>)}
+      {remainingCount > 0 ? <li>&hellip; and {remainingCount} more document{
         remainingCount > 1 ? "s" : ""
-      }`
-    : fileList;
+      }</li> : "" }
+    </ul>
+  );
 }
 
 interface DeleteConfirmationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title?: string;
-  description?: string;
+  description?: string | ReactElement;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void | Promise<void>;
   isLoading?: boolean;
   variant?: "destructive" | "default";
+  children?: ReactElement;
 }
 
 export const DeleteConfirmationDialog: React.FC<
@@ -56,6 +59,7 @@ export const DeleteConfirmationDialog: React.FC<
   onConfirm,
   isLoading = false,
   variant = "destructive",
+  children,
 }) => {
   const handleConfirm = async () => {
     try {
@@ -80,7 +84,7 @@ export const DeleteConfirmationDialog: React.FC<
           </div>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-
+        {children}
         <DialogFooter>
           <Button
             type="button"
