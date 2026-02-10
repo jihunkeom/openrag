@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactElement } from "react";
+import React, { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ import { AlertTriangle } from "lucide-react";
 export function formatFilesToDelete(
   files: Array<{ filename: string }>,
   maxVisible = 5,
-): ReactElement {
+): ReactNode {
   const visibleFiles = files.slice(0, maxVisible);
   const remainingCount = files.length - maxVisible;
   return (
@@ -38,13 +38,13 @@ interface DeleteConfirmationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title?: string;
-  description?: string | ReactElement;
+  description?: string;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void | Promise<void>;
   isLoading?: boolean;
   variant?: "destructive" | "default";
-  children?: ReactElement;
+  children?: ReactNode;
 }
 
 export const DeleteConfirmationDialog: React.FC<
@@ -84,7 +84,9 @@ export const DeleteConfirmationDialog: React.FC<
           </div>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {children}
+        <div className="text-sm text-muted-foreground">
+          {children}
+        </div>
         <DialogFooter>
           <Button
             type="button"

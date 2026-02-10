@@ -443,11 +443,9 @@ function SearchPage() {
         onConfirm={handleBulkDelete}
         isLoading={deleteDocumentMutation.isPending}
       >
-        <div className="text-sm text-muted-foreground">
-          <p className="my-2">This will remove all chunks and data associated with these documents. This action cannot be undone.</p>
-          <p className="my-2">Documents to be deleted:</p>
-          {formatFilesToDelete(selectedRows)}
-        </div>
+        <p className="my-2">This will remove all chunks and data associated with these documents. This action cannot be undone.</p>
+        <p className="my-2">Documents to be deleted:</p>
+        {formatFilesToDelete(selectedRows)}
       </DeleteConfirmationDialog>
     </>
   );
