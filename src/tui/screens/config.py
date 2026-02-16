@@ -580,6 +580,7 @@ class ConfigScreen(Screen):
             placeholder="~/.openrag/documents",
             value=current_value,
             validators=[DocumentsPathValidator()],
+            validate_on=["submitted"],
             id="input-openrag_documents_paths",
         )
         yield input_widget
@@ -692,6 +693,7 @@ class ConfigScreen(Screen):
                 placeholder=placeholder,
                 value=current_value,
                 validators=[DocumentsPathValidator()],
+                validate_on=["submitted"],
                 id=f"input-{field_name}",
             )
         elif "password" in field_name or "secret" in field_name:
