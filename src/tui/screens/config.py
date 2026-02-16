@@ -603,6 +603,8 @@ class ConfigScreen(Screen):
         input_widget = Input(
             placeholder="~/.openrag/data/opensearch-data",
             value=current_value,
+            validators=[DocumentsPathValidator()],
+            validate_on=["submitted"],
             id="input-opensearch_data_path",
         )
         yield input_widget
