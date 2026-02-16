@@ -1,19 +1,15 @@
 """Configuration screen for OpenRAG TUI."""
 
-import re
 from zxcvbn import zxcvbn
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import Screen
 from textual.widgets import (
-    Header,
     Footer,
     Static,
     Button,
     Input,
     Label,
-    TabbedContent,
-    TabPane,
     Checkbox,
 )
 from textual.validation import ValidationResult, Validator
@@ -28,7 +24,6 @@ from ..utils.validation import (
     validate_watsonx_endpoint,
     validate_documents_paths,
 )
-from pathlib import Path
 
 
 class OpenAIKeyValidator(Validator):
@@ -219,7 +214,6 @@ class ConfigScreen(Screen):
         yield Static(" ")
 
         # Langflow Admin Username - conditionally displayed based on password
-        current_password = getattr(self.env_manager.config, "langflow_superuser_password", "")
         yield Label("Langflow Admin Username *", id="langflow-username-label")
         current_value = getattr(self.env_manager.config, "langflow_superuser", "")
         input_widget = Input(
@@ -766,7 +760,7 @@ class ConfigScreen(Screen):
 
         if validation_errors:
             self.notify(
-                f"Validation failed:\n" + "\n".join(validation_errors[:3]),
+                "Validation failed:\n" + "\n".join(validation_errors[:3]),
                 severity="error",
             )
             return
@@ -785,7 +779,7 @@ class ConfigScreen(Screen):
                 error_messages.append(f"{field}: {error}")
 
             self.notify(
-                f"Validation failed:\n" + "\n".join(error_messages[:3]),
+                "Validation failed:\n" + "\n".join(error_messages[:3]),
                 severity="error",
             )
             return
