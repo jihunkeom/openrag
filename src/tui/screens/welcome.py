@@ -511,11 +511,20 @@ class WelcomeScreen(Screen):
         # If there are any conflicts, show error and return
         if conflicts:
             conflict_str = ", ".join(conflicts)
+            # Check if frontend port conflict specifically
+            frontend_conflict = any("frontend" in c.lower() or "3000" in c for c in conflicts)
+            langflow_conflict = any("langflow" in c.lower() or "7860" in c for c in conflicts)
+            
+            error_msg = f"Cannot start services: Port conflicts detected for {conflict_str}."
+            if frontend_conflict or langflow_conflict:
+                error_msg += " You can set FRONTEND_PORT or LANGFLOW_PORT environment variables in your .env file to use different ports."
+            else:
+                error_msg += " Please stop the conflicting services first."
+            
             self.notify(
-                f"Cannot start services: Port conflicts detected for {conflict_str}. "
-                f"Please stop the conflicting services first.",
+                error_msg,
                 severity="error",
-                timeout=10
+                timeout=15
             )
             return
 
@@ -640,71 +649,14 @@ class WelcomeScreen(Screen):
         """Open the OpenRAG app in the default browser."""
         self.run_worker(self._open_app_async())
 
-    async def _open_app_async(self) -> None:
-        """Open the OpenRAG app in the default browser, detecting the actual port."""
+    def action_open_app(self) -> None:
+        """Open the OpenRAG app in the default browser."""
         import webbrowser
-        import re
-        
         try:
-            # Try to get the actual port from the running container first
-            frontend_port = None
-            
-            if self.container_manager.is_available():
-                # First try: use docker/podman port command for accurate port mapping
-                try:
-                    runtime_cmd = self.container_manager.runtime_info.runtime_command
-                    success, stdout, _ = await self.container_manager._run_runtime_command(
-                        ["port", "openrag-frontend", "3000"]
-                    )
-                    if success and stdout.strip():
-                        # Output format: "0.0.0.0:3001" or "::3001" or just "3001"
-                        port_line = stdout.strip().splitlines()[0]
-                        # Extract port number (last part after :)
-                        if ":" in port_line:
-                            port_part = port_line.split(":")[-1]
-                            try:
-                                frontend_port = int(port_part)
-                            except ValueError:
-                                pass
-                except Exception:
-                    pass  # Fall back to service status method
-                
-                # Second try: use service status port information
-                if frontend_port is None:
-                    services = await self.container_manager.get_service_status()
-                    frontend_service = services.get("openrag-frontend")
-                    
-                    if frontend_service and frontend_service.status == ServiceStatus.RUNNING:
-                        # Extract port from ports list
-                        # Format can be: "3000:3000", "0.0.0.0:3000->3000/tcp", etc.
-                        if frontend_service.ports:
-                            for port_mapping in frontend_service.ports:
-                                if isinstance(port_mapping, str):
-                                    # Parse string format like "3000:3000" or "0.0.0.0:3000->3000/tcp"
-                                    # Extract the host port (first number)
-                                    match = re.search(r'(\d+)(?:->|\:)', port_mapping)
-                                    if match:
-                                        try:
-                                            frontend_port = int(match.group(1))
-                                            break
-                                        except ValueError:
-                                            continue
-                                    # Fallback: try simple "port:port" format
-                                    if ":" in port_mapping and not "->" in port_mapping:
-                                        parts = port_mapping.split(":")
-                                        if parts:
-                                            try:
-                                                frontend_port = int(parts[0])
-                                                break
-                                            except ValueError:
-                                                continue
-            
-            # Fallback to environment variable if we couldn't detect the port
-            if frontend_port is None:
-                frontend_port = int(os.getenv("FRONTEND_PORT", "3000"))
-            
+            # Get the frontend port from environment variable, defaulting to 3000
+            frontend_port = os.getenv("FRONTEND_PORT", "3000")
             webbrowser.open(f"http://localhost:{frontend_port}")
-            self.notify(f"Opening OpenRAG app at http://localhost:{frontend_port}...", severity="information")
+            self.notify("Opening OpenRAG app in browser...", severity="information")
         except Exception as e:
             self.notify(f"Error opening app: {e}", severity="error")
 

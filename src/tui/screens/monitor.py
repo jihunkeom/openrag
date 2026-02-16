@@ -347,11 +347,20 @@ class MonitorScreen(Screen):
                 if len(conflicts) > 3:
                     conflict_str += f" and {len(conflicts) - 3} more"
 
+                # Check if frontend or langflow ports are conflicted
+                frontend_conflict = any("frontend" in name.lower() or port == 3000 for name, port, _ in conflicts)
+                langflow_conflict = any("langflow" in name.lower() or port == 7860 for name, port, _ in conflicts)
+                
+                error_msg = f"Cannot start services: Port conflicts detected for {conflict_str}."
+                if frontend_conflict or langflow_conflict:
+                    error_msg += " You can set FRONTEND_PORT or LANGFLOW_PORT environment variables in your .env file to use different ports."
+                else:
+                    error_msg += " Please stop the conflicting services first."
+
                 self.notify(
-                    f"Cannot start services: Port conflicts detected for {conflict_str}. "
-                    f"Please stop the conflicting services first.",
+                    error_msg,
                     severity="error",
-                    timeout=10,
+                    timeout=15,
                 )
                 # Refresh to show current state
                 await self._refresh_services()

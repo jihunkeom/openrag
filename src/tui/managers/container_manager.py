@@ -1012,7 +1012,17 @@ class ContainerManager:
             yield False, "ERROR: Port conflicts detected:", False
             for service_name, port, error_msg in conflicts:
                 yield False, f"  - {service_name}: {error_msg}", False
-            yield False, "Please stop the conflicting services and try again.", False
+            
+            # Check if frontend or langflow ports are conflicted
+            frontend_conflict = any("frontend" in name.lower() or port == 3000 for name, port, _ in conflicts)
+            langflow_conflict = any("langflow" in name.lower() or port == 7860 for name, port, _ in conflicts)
+            
+            if frontend_conflict or langflow_conflict:
+                yield False, "", False
+                yield False, "You can set FRONTEND_PORT or LANGFLOW_PORT environment variables", False
+                yield False, "in your .env file to use different ports.", False
+            else:
+                yield False, "Please stop the conflicting services and try again.", False
             yield False, "Services not started due to port conflicts.", False
             return
 
