@@ -4127,7 +4127,7 @@
                 "title_case": false,
                 "track_in_telemetry": false,
                 "type": "str",
-                "value": "jwt"
+                "value": ""
               },
               "m": {
                 "_input_type": "IntInput",
@@ -4217,7 +4217,7 @@
                 "dynamic": false,
                 "info": "",
                 "input_types": [],
-                "load_from_db": false,
+                "load_from_db": true,
                 "name": "password",
                 "override_skip": false,
                 "password": true,
@@ -4227,7 +4227,7 @@
                 "title_case": false,
                 "track_in_telemetry": false,
                 "type": "str",
-                "value": "MyStrongOpenSearchPassword123!"
+                "value": "0DMwTOQtOpZppA7uF4oqr7S9"
               },
               "search_query": {
                 "_input_type": "QueryInput",
