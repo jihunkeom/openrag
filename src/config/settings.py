@@ -92,7 +92,7 @@ WEBHOOK_BASE_URL = os.getenv(
 
 # OpenSearch configuration
 VECTOR_DIM = 1536
-KNN_EF_CONSTRUCTION = 512
+KNN_EF_CONSTRUCTION = 100
 KNN_M = 16
 EMBED_MODEL = "text-embedding-3-small"
 
