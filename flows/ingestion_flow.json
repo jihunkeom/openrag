@@ -4227,7 +4227,7 @@
                 "title_case": false,
                 "track_in_telemetry": false,
                 "type": "str",
-                "value": "0DMwTOQtOpZppA7uF4oqr7S9"
+                "value": "OPENSEARCH_PASSWORD"
               },
               "search_query": {
                 "_input_type": "QueryInput",
