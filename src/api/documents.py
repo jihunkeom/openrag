@@ -1,9 +1,15 @@
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from utils.logging_config import get_logger
-from config.settings import INDEX_NAME
+from config.settings import get_index_name
 
 logger = get_logger(__name__)
+
+
+async def _ensure_index_exists():
+    """Create the OpenSearch index if it doesn't exist yet."""
+    from main import init_index
+    await init_index()
 
 
 async def check_filename_exists(request: Request, document_service, session_manager):
@@ -27,12 +33,23 @@ async def check_filename_exists(request: Request, document_service, session_mana
 
         search_body = build_filename_search_body(filename, size=1, source=["filename"])
 
-        logger.debug(f"Checking filename existence: {filename}")
+        logger.debug(f"Checking filename existence", filename=filename, index_name=get_index_name())
 
-        response = await opensearch_client.search(
-            index=INDEX_NAME,
-            body=search_body
-        )
+        try:
+            response = await opensearch_client.search(
+                index=get_index_name(),
+                body=search_body
+            )
+        except Exception as search_err:
+            if "index_not_found_exception" in str(search_err):
+                logger.info("Index does not exist, creating it now before upload")
+                await _ensure_index_exists()
+                # Index was just created so no duplicates can exist
+                return JSONResponse({
+                    "exists": False,
+                    "filename": filename
+                }, status_code=200)
+            raise
 
         # Check if any hits were found
         hits = response.get("hits", {}).get("hits", [])
@@ -79,7 +96,7 @@ async def delete_documents_by_filename(request: Request, document_service, sessi
         logger.debug(f"Deleting documents with filename: {filename}")
 
         result = await opensearch_client.delete_by_query(
-            index=INDEX_NAME,
+            index=get_index_name(),
             body=delete_query,
             conflicts="proceed"
         )

@@ -25,6 +25,7 @@ global:
     scheme: "https"                       # https for production SaaS
     username: "admin"                     # OpenSearch username
     password: ""                          # OpenSearch password (stored in secret)
+    indexName: "documents"                # OpenSearch index name
 
   # Shared OAuth credentials (same across all tenants)
   oauth:
@@ -90,9 +91,17 @@ langflow:
   # Runtime settings
   deactivateTracing: true
   logLevel: "INFO"                        # DEBUG, INFO, WARNING, ERROR
+  doclingServeUrl: "http://host.docker.internal:5001"
+  openragQueryFilter: "{}"
+
+  # Langfuse Tracking
+  langfuse:
+    secretKey: ""
+    publicKey: ""
+    host: "https://cloud.langfuse.com"
 
   # Variables to expose to flows
-  variablesToGetFromEnvironment: "JWT,OPENRAG-QUERY-FILTER,OPENSEARCH_PASSWORD,OPENSEARCH_URL,DOCLING_SERVE_URL,OWNER,OWNER_NAME,OWNER_EMAIL,CONNECTOR_TYPE,FILENAME,MIMETYPE,FILESIZE,SELECTED_EMBEDDING_MODEL,OPENAI_API_KEY,ANTHROPIC_API_KEY,WATSONX_API_KEY,WATSONX_ENDPOINT,WATSONX_PROJECT_ID,OLLAMA_BASE_URL"
+  variablesToGetFromEnvironment: "JWT,OPENRAG-QUERY-FILTER,OPENSEARCH_PASSWORD,OPENSEARCH_URL,OPENSEARCH_INDEX_NAME,DOCLING_SERVE_URL,OWNER,OWNER_NAME,OWNER_EMAIL,CONNECTOR_TYPE,DOCUMENT_ID,SOURCE_URL,ALLOWED_USERS,ALLOWED_GROUPS,FILENAME,MIMETYPE,FILESIZE,SELECTED_EMBEDDING_MODEL,OPENAI_API_KEY,ANTHROPIC_API_KEY,WATSONX_API_KEY,WATSONX_ENDPOINT,WATSONX_PROJECT_ID,OLLAMA_BASE_URL"
 
   # Probes
   livenessProbe:
@@ -156,9 +165,24 @@ backend:
       size: 1Gi
       mountPath: /app/config
 
+  # Logging
+  logLevel: "INFO"                        # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  noColor: false                          # Set true to disable ANSI color codes in log output
+  accessLog: true                         # Set false to disable HTTP access log events
+
+  # Timeouts
+  langflowTimeout: 2400                   # seconds; total timeout for Langflow HTTP calls (default: 40 min)
+  langflowConnectTimeout: 30              # seconds; connection timeout for Langflow HTTP calls
+  ingestionTimeout: 3600                  # seconds; per-file processing timeout for ingestion tasks
+
+  # Concurrency
+  uploadBatchSize: 25                     # Max files per batch when ingesting from a folder
+  maxWorkers: ""                          # Backend worker processes; empty = auto (min(4, CPU_COUNT // 2))
+
   # Feature flags
   features:
     disableIngestWithLangflow: false      # Set true to use traditional processor instead of Langflow
+    ingestSampleData: true                # Set true to ingest sample data on startup
 
   # Langflow public URL (for UI links to Langflow)
   langflowPublicUrl: ""                   # e.g., "https://langflow.example.com"

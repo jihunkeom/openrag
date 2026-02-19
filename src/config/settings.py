@@ -59,11 +59,24 @@ DISABLE_INGEST_WITH_LANGFLOW = os.getenv(
     "DISABLE_INGEST_WITH_LANGFLOW", "false"
 ).lower() in ("true", "1", "yes")
 
+# Ingest sample data configuration
+INGEST_SAMPLE_DATA = os.getenv(
+    "INGEST_SAMPLE_DATA", "true"
+).lower() in ("true", "1", "yes")
+
+# Maximum number of files to upload / ingest (in batch) per task when adding knowledge via folder
+UPLOAD_BATCH_SIZE = int(os.getenv("UPLOAD_BATCH_SIZE", "25"))
+
 # Langflow HTTP timeout configuration (in seconds)
 # For large documents (300+ pages), ingestion can take 30+ minutes
 # Default: 40 minutes total, 40 minutes read timeout
 LANGFLOW_TIMEOUT = float(os.getenv("LANGFLOW_TIMEOUT", "2400"))  # 40 minutes
 LANGFLOW_CONNECT_TIMEOUT = float(os.getenv("LANGFLOW_CONNECT_TIMEOUT", "30"))  # 30 seconds
+
+# Per-file processing timeout for document ingestion tasks (in seconds)
+# Should be >= LANGFLOW_TIMEOUT to allow long-running ingestion to complete
+# Default: 3600 seconds (60 minutes)
+INGESTION_TIMEOUT = int(os.getenv("INGESTION_TIMEOUT", "3600"))
 
 
 def is_no_auth_mode():
@@ -78,8 +91,9 @@ WEBHOOK_BASE_URL = os.getenv(
 )  # No default - must be explicitly configured
 
 # OpenSearch configuration
-INDEX_NAME = "documents"
 VECTOR_DIM = 1536
+KNN_EF_CONSTRUCTION = 100
+KNN_M = 16
 EMBED_MODEL = "text-embedding-3-small"
 
 OPENAI_EMBEDDING_DIMENSIONS = {
@@ -90,7 +104,7 @@ OPENAI_EMBEDDING_DIMENSIONS = {
 
 WATSONX_EMBEDDING_DIMENSIONS = {
 # IBM Models
-"ibm/granite-embedding-107m-multilingual": 384,  
+"ibm/granite-embedding-107m-multilingual": 384,
 "ibm/granite-embedding-278m-multilingual": 1024,
 "ibm/slate-125m-english-rtrvr": 768,
 "ibm/slate-125m-english-rtrvr-v2": 768,
@@ -123,7 +137,7 @@ INDEX_BODY = {
                     "name": "disk_ann",
                     "engine": "jvector",
                     "space_type": "l2",
-                    "parameters": {"ef_construction": 100, "m": 16},
+                    "parameters": {"ef_construction": KNN_EF_CONSTRUCTION, "m": KNN_M},
                 },
             },
             # Track which embedding model was used for this chunk
@@ -297,9 +311,6 @@ class AppClients:
         self.converter = None
 
     async def initialize(self):
-        # Generate Langflow API key first
-        await get_langflow_api_key()
-
         # Initialize OpenSearch client
         self.opensearch = AsyncOpenSearch(
             hosts=[{"host": OPENSEARCH_HOST, "port": OPENSEARCH_PORT}],
@@ -311,6 +322,45 @@ class AppClients:
             http_auth=(OPENSEARCH_USERNAME, OPENSEARCH_PASSWORD),
             http_compress=True,
         )
+
+        # Initialize patched OpenAI client if API key is available
+        # This allows the app to start even if OPENAI_API_KEY is not set yet
+        # (e.g., when it will be provided during onboarding)
+        # The property will handle lazy initialization with probe when first accessed
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            logger.info("OpenAI API key found in environment - will be initialized lazily on first use with HTTP/2 probe")
+        else:
+            logger.info("OpenAI API key not found in environment - will be initialized on first use if needed")
+
+        # Initialize document converter
+        self.converter = create_document_converter(ocr_engine=DOCLING_OCR_ENGINE)
+
+        # Initialize Langflow HTTP client with extended timeouts for large documents
+        # Must be created before wait_for_langflow / get_langflow_api_key
+        # Use explicit timeout configuration to handle large PDF ingestion (300+ pages)
+        self.langflow_http_client = httpx.AsyncClient(
+            base_url=LANGFLOW_URL,
+            timeout=httpx.Timeout(
+                timeout=LANGFLOW_TIMEOUT,  # Total timeout
+                connect=LANGFLOW_CONNECT_TIMEOUT,  # Connection timeout
+                read=LANGFLOW_TIMEOUT,  # Read timeout (most important for large PDFs)
+                write=LANGFLOW_CONNECT_TIMEOUT,  # Write timeout
+                pool=LANGFLOW_CONNECT_TIMEOUT,  # Pool timeout
+            )
+        )
+        logger.info(
+            "Initialized Langflow HTTP client with extended timeouts",
+            timeout_seconds=LANGFLOW_TIMEOUT,
+            connect_timeout_seconds=LANGFLOW_CONNECT_TIMEOUT,
+        )
+
+        # Wait for Langflow to be healthy before generating API key
+        from utils.langflow_utils import wait_for_langflow
+        await wait_for_langflow(langflow_http_client=self.langflow_http_client)
+
+        # Generate Langflow API key now that Langflow is confirmed ready
+        await get_langflow_api_key()
 
         # Initialize Langflow client with generated/provided API key
         if LANGFLOW_KEY and self.langflow_client is None:
@@ -331,37 +381,6 @@ class AppClients:
             logger.warning(
                 "No Langflow client initialized yet, will attempt later on first use"
             )
-
-        # Initialize patched OpenAI client if API key is available
-        # This allows the app to start even if OPENAI_API_KEY is not set yet
-        # (e.g., when it will be provided during onboarding)
-        # The property will handle lazy initialization with probe when first accessed
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
-            logger.info("OpenAI API key found in environment - will be initialized lazily on first use with HTTP/2 probe")
-        else:
-            logger.info("OpenAI API key not found in environment - will be initialized on first use if needed")
-
-        # Initialize document converter
-        self.converter = create_document_converter(ocr_engine=DOCLING_OCR_ENGINE)
-
-        # Initialize Langflow HTTP client with extended timeouts for large documents
-        # Use explicit timeout configuration to handle large PDF ingestion (300+ pages)
-        self.langflow_http_client = httpx.AsyncClient(
-            base_url=LANGFLOW_URL,
-            timeout=httpx.Timeout(
-                timeout=LANGFLOW_TIMEOUT,  # Total timeout
-                connect=LANGFLOW_CONNECT_TIMEOUT,  # Connection timeout
-                read=LANGFLOW_TIMEOUT,  # Read timeout (most important for large PDFs)
-                write=LANGFLOW_CONNECT_TIMEOUT,  # Write timeout
-                pool=LANGFLOW_CONNECT_TIMEOUT,  # Pool timeout
-            )
-        )
-        logger.info(
-            "Initialized Langflow HTTP client with extended timeouts",
-            timeout_seconds=LANGFLOW_TIMEOUT,
-            connect_timeout_seconds=LANGFLOW_CONNECT_TIMEOUT,
-        )
 
         return self
 
@@ -410,17 +429,17 @@ class AppClients:
             # LiteLLM routes based on model name prefixes (openai/, ollama/, watsonx/, etc.)
             try:
                 config = get_openrag_config()
-                
+
                 # Set OpenAI credentials
                 if config.providers.openai.api_key:
                     os.environ["OPENAI_API_KEY"] = config.providers.openai.api_key
                     logger.debug("Loaded OpenAI API key from config")
-                
+
                 # Set Anthropic credentials
                 if config.providers.anthropic.api_key:
                     os.environ["ANTHROPIC_API_KEY"] = config.providers.anthropic.api_key
                     logger.debug("Loaded Anthropic API key from config")
-                
+
                 # Set WatsonX credentials
                 if config.providers.watsonx.api_key:
                     os.environ["WATSONX_API_KEY"] = config.providers.watsonx.api_key
@@ -431,13 +450,13 @@ class AppClients:
                     os.environ["WATSONX_PROJECT_ID"] = config.providers.watsonx.project_id
                 if config.providers.watsonx.api_key:
                     logger.debug("Loaded WatsonX credentials from config")
-                
+
                 # Set Ollama endpoint
                 if config.providers.ollama.endpoint:
                     os.environ["OLLAMA_BASE_URL"] = config.providers.ollama.endpoint
                     os.environ["OLLAMA_ENDPOINT"] = config.providers.ollama.endpoint
                     logger.debug("Loaded Ollama endpoint from config")
-                    
+
             except Exception as e:
                 logger.debug("Could not load provider credentials from config", error=str(e))
 
@@ -817,3 +836,8 @@ def get_agent_config():
 def get_embedding_model() -> str:
     """Return the currently configured embedding model."""
     return get_openrag_config().knowledge.embedding_model or EMBED_MODEL if DISABLE_INGEST_WITH_LANGFLOW else ""
+
+
+def get_index_name() -> str:
+    """Return the currently configured index name."""
+    return get_openrag_config().knowledge.index_name

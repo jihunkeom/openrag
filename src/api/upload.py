@@ -74,6 +74,9 @@ async def upload_path(request: Request, task_service, session_manager):
         owner_name = user.name
         owner_email = user.email
 
+    from .documents import _ensure_index_exists
+    await _ensure_index_exists()
+
     task_id = await task_service.create_upload_task(
         owner_user_id,
         file_paths,
@@ -135,7 +138,8 @@ async def upload_options(request: Request, session_manager):
     aws_enabled = bool(
         os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
     )
-    return JSONResponse({"aws": aws_enabled})
+    from config.settings import UPLOAD_BATCH_SIZE
+    return JSONResponse({"aws": aws_enabled, "upload_batch_size": UPLOAD_BATCH_SIZE})
 
 
 async def upload_bucket(request: Request, task_service, session_manager):
@@ -183,6 +187,9 @@ async def upload_bucket(request: Request, task_service, session_manager):
         owner_name = user.name
         owner_email = user.email
         task_user_id = user.user_id
+
+    from .documents import _ensure_index_exists
+    await _ensure_index_exists()
 
     processor = S3FileProcessor(
         task_service.document_service,
