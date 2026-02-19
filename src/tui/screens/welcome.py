@@ -11,7 +11,7 @@ from rich.align import Align
 from dotenv import load_dotenv
 
 from .. import __version__
-from ..managers.container_manager import ContainerManager, ServiceStatus
+from ..managers.container_manager import ContainerManager, ServiceStatus, format_port_conflict_message
 from ..managers.env_manager import EnvManager
 from ..managers.docling_manager import DoclingManager
 from ..widgets.command_modal import CommandOutputModal
@@ -491,38 +491,24 @@ class WelcomeScreen(Screen):
     async def _start_all_services(self) -> None:
         """Start all services: containers first, then native services."""
         # Check for port conflicts before attempting to start anything
-        conflicts = []
+        conflicts: list[tuple[str, int, str]] = []
 
         # Check container ports only if services are not already running
         if self.container_manager.is_available() and not self.services_running:
             ports_available, port_conflicts = await self.container_manager.check_ports_available()
             if not ports_available:
-                for service_name, port, error_msg in port_conflicts[:3]:  # Show first 3
-                    conflicts.append(f"{service_name} (port {port})")
-                if len(port_conflicts) > 3:
-                    conflicts.append(f"and {len(port_conflicts) - 3} more")
+                conflicts.extend(port_conflicts)
 
         # Check native service port only if it's not already running
         if not self.docling_manager.is_running():
             port_available, error_msg = self.docling_manager.check_port_available()
             if not port_available:
-                conflicts.append(f"docling (port {self.docling_manager._port})")
+                conflicts.append(("docling", self.docling_manager._port, error_msg or f"Port {self.docling_manager._port} is already in use"))
 
         # If there are any conflicts, show error and return
         if conflicts:
-            conflict_str = ", ".join(conflicts)
-            # Check if frontend port conflict specifically
-            frontend_conflict = any("frontend" in c.lower() or "3000" in c for c in conflicts)
-            langflow_conflict = any("langflow" in c.lower() or "7860" in c for c in conflicts)
-            
-            error_msg = f"Cannot start services: Port conflicts detected for {conflict_str}."
-            if frontend_conflict or langflow_conflict:
-                error_msg += " You can set FRONTEND_PORT or LANGFLOW_PORT environment variables in your .env file to use different ports."
-            else:
-                error_msg += " Please stop the conflicting services first."
-            
             self.notify(
-                error_msg,
+                format_port_conflict_message(conflicts),
                 severity="error",
                 timeout=15
             )
@@ -645,10 +631,6 @@ class WelcomeScreen(Screen):
         # Update state
         self.docling_running = self.docling_manager.is_running()
         await self._refresh_welcome_content()
-
-    def action_open_app(self) -> None:
-        """Open the OpenRAG app in the default browser."""
-        self.run_worker(self._open_app_async())
 
     def action_open_app(self) -> None:
         """Open the OpenRAG app in the default browser."""

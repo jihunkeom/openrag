@@ -17,7 +17,7 @@ from textual.timer import Timer
 from rich.text import Text
 from rich.table import Table
 
-from ..managers.container_manager import ContainerManager, ServiceStatus, ServiceInfo
+from ..managers.container_manager import ContainerManager, ServiceStatus, ServiceInfo, format_port_conflict_message
 from ..managers.docling_manager import DoclingManager
 from ..utils.platform import RuntimeType
 from ..widgets.command_modal import CommandOutputModal
@@ -338,27 +338,8 @@ class MonitorScreen(Screen):
                 conflicts,
             ) = await self.container_manager.check_ports_available()
             if not ports_available:
-                # Show error notification instead of modal
-                conflict_msgs = []
-                for service_name, port, error_msg in conflicts[:3]:  # Show first 3
-                    conflict_msgs.append(f"{service_name} (port {port})")
-
-                conflict_str = ", ".join(conflict_msgs)
-                if len(conflicts) > 3:
-                    conflict_str += f" and {len(conflicts) - 3} more"
-
-                # Check if frontend or langflow ports are conflicted
-                frontend_conflict = any("frontend" in name.lower() or port == 3000 for name, port, _ in conflicts)
-                langflow_conflict = any("langflow" in name.lower() or port == 7860 for name, port, _ in conflicts)
-                
-                error_msg = f"Cannot start services: Port conflicts detected for {conflict_str}."
-                if frontend_conflict or langflow_conflict:
-                    error_msg += " You can set FRONTEND_PORT or LANGFLOW_PORT environment variables in your .env file to use different ports."
-                else:
-                    error_msg += " Please stop the conflicting services first."
-
                 self.notify(
-                    error_msg,
+                    format_port_conflict_message(conflicts),
                     severity="error",
                     timeout=15,
                 )
