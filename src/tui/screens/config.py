@@ -7,14 +7,11 @@ from textual.app import ComposeResult
 from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.screen import Screen
 from textual.widgets import (
-    Header,
     Footer,
     Static,
     Button,
     Input,
     Label,
-    TabbedContent,
-    TabPane,
     Checkbox,
 )
 from textual.validation import ValidationResult, Validator
@@ -400,6 +397,7 @@ class ConfigScreen(Screen):
             placeholder=field.placeholder,
             value=current_value,
             validators=[DocumentsPathValidator()],
+            validate_on=["submitted"],
             id=f"input-{field.name}",
         )
         yield input_widget
@@ -410,6 +408,7 @@ class ConfigScreen(Screen):
         )
         self.inputs[field.name] = input_widget
         yield Static(" ")
+
 
     def on_mount(self) -> None:
         """Initialize the screen when mounted."""
@@ -510,7 +509,7 @@ class ConfigScreen(Screen):
 
         if validation_errors:
             self.notify(
-                f"Validation failed:\n" + "\n".join(validation_errors[:3]),
+                "Validation failed:\n" + "\n".join(validation_errors[:3]),
                 severity="error",
             )
             return
@@ -529,7 +528,7 @@ class ConfigScreen(Screen):
                 error_messages.append(f"{field}: {error}")
 
             self.notify(
-                f"Validation failed:\n" + "\n".join(error_messages[:3]),
+                "Validation failed:\n" + "\n".join(error_messages[:3]),
                 severity="error",
             )
             return
