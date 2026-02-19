@@ -35,13 +35,6 @@ async def upload(request: Request, document_service, session_manager):
         )
         return JSONResponse(result, status_code=201)  # Created
     except Exception as e:
-        from utils.document_processing import DoclingNotInstalledError
-
-        if isinstance(e, DoclingNotInstalledError):
-            return JSONResponse(
-                {"error": str(e), "detail": "Install openrag[docling] or use Langflow for ingestion."},
-                status_code=503,
-            )
         error_msg = str(e)
         if (
             "AuthenticationException" in error_msg

@@ -33,8 +33,15 @@ def is_docling_available() -> bool:
         return False
 
 
+def require_docling(message: str | None = None) -> None:
+    """Raise DoclingNotInstalledError if the docling extra is not installed."""
+    if not is_docling_available():
+        raise DoclingNotInstalledError(message)
+
+
 def create_document_converter(ocr_engine: str | None = None):
     """Create a Docling DocumentConverter with OCR disabled unless requested."""
+    require_docling()
     if ocr_engine is None:
         ocr_engine = os.getenv("DOCLING_OCR_ENGINE")
 
@@ -109,8 +116,7 @@ def create_document_converter(ocr_engine: str | None = None):
 def get_worker_converter():
     """Get or create a DocumentConverter instance for this worker process"""
     global _worker_converter
-    if not is_docling_available():
-        raise DoclingNotInstalledError()
+    require_docling()
     if _worker_converter is None:
         # Configure GPU settings for this worker
         has_gpu_devices, _ = detect_gpu_devices()
