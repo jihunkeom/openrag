@@ -1,7 +1,13 @@
-FROM python:3.13-slim
+# Build arg: set INSTALL_DOCLING=1 to add in-process docling extra + model downloads. docling-serve is always installed; torch is not.
+ARG INSTALL_DOCLING=0
 
-# Install curl for uv installation and openssl for RSA key generation
-# Also install git for potential dependencies and build-essential for native compilations
+# -----------------------------------------------------------------------------
+# Builder stage: install deps and optional docling models
+# -----------------------------------------------------------------------------
+FROM python:3.13-slim AS builder
+
+ARG INSTALL_DOCLING=0
+
 RUN apt-get update && apt-get install -y \
     curl \
     openssl \
@@ -9,43 +15,47 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
-# Set working directory
 WORKDIR /app
 
-# Copy Python dependencies
 COPY pyproject.toml uv.lock ./
-RUN uv sync
 
-# Copy sample document and warmup script for docling
-COPY openrag-documents/warmup_ocr.pdf ./
-COPY warm_up_docling.py ./
-RUN uv run docling-tools models download 
-RUN uv run python - <<'PY'
-import pathlib, easyocr
-cache = pathlib.Path("/root/.EasyOCR/model")
-cache.mkdir(parents=True, exist_ok=True)
-# Prewarm the detector + recog for Docling’s default langs
-easyocr.Reader(['fr','de','es','en'],
-               download_enabled=True,
-               model_storage_directory=str(cache))
-print("EasyOCR cache ready at", cache)
-PY
+# Default: docling-serve (required), no torch, no in-process docling extra. With INSTALL_DOCLING=1 add docling extra + models.
+RUN if [ "$INSTALL_DOCLING" = "1" ]; then uv sync --extra docling; else uv sync; fi
 
-# RUN uv run python warm_up_docling.py && rm warm_up_docling.py warmup_ocr.pdf
+# Conditional docling/EasyOCR model downloads (only when INSTALL_DOCLING=1). EasyOCR cache under /app for final stage.
+RUN if [ "$INSTALL_DOCLING" = "1" ]; then uv run docling-tools models download; fi
+RUN if [ "$INSTALL_DOCLING" = "1" ]; then uv run python -c "\
+import pathlib, easyocr; \
+cache = pathlib.Path('/app/.EasyOCR/model'); \
+cache.mkdir(parents=True, exist_ok=True); \
+easyocr.Reader(['fr','de','es','en'], download_enabled=True, model_storage_directory=str(cache)); \
+print('EasyOCR cache ready at', cache)"; fi
+RUN if [ "$INSTALL_DOCLING" = "1" ]; then rm -rf /root/.cache/httpx /root/.cache/uv 2>/dev/null || true; fi
 
-
-#ENV EASYOCR_MODULE_PATH=~/.cache/docling/models/EasyOcr/
-
-# Copy Python source and flows
 COPY src/ ./src/
 COPY flows/ ./flows/
 
-# Expose backend port
+# -----------------------------------------------------------------------------
+# Final stage: minimal runtime image
+# -----------------------------------------------------------------------------
+FROM python:3.13-slim
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy installed app and venv from builder (same Python base image so venv is valid)
+COPY --from=builder /app /app
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
 EXPOSE 8000
 
-# Start backend in foreground
-CMD ["uv", "run", "python", "src/main.py"]
+CMD ["python", "src/main.py"]

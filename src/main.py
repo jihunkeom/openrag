@@ -28,9 +28,8 @@ from starlette.responses import JSONResponse
 # Set multiprocessing start method to 'spawn' for CUDA compatibility
 multiprocessing.set_start_method("spawn", force=True)
 
-# Create process pool FIRST, before any torch/CUDA imports
+# Create process pool FIRST, before any torch/CUDA imports (torch is optional)
 from utils.process_pool import process_pool  # isort: skip
-import torch
 
 # API endpoints
 from api import (
@@ -94,11 +93,19 @@ from services.search_service import SearchService
 from services.task_service import TaskService
 from session_manager import SessionManager
 
-logger.info(
-    "CUDA device information",
-    cuda_available=torch.cuda.is_available(),
-    cuda_version=torch.version.cuda,
-)
+try:
+    import torch
+    logger.info(
+        "CUDA device information",
+        cuda_available=torch.cuda.is_available(),
+        cuda_version=getattr(torch.version, "cuda", None) or "N/A",
+    )
+except ImportError:
+    logger.info(
+        "CUDA device information",
+        cuda_available=False,
+        cuda_version="N/A (torch not installed)",
+    )
 
 # Files to exclude from startup ingestion
 EXCLUDED_INGESTION_FILES = {"warmup_ocr.pdf"}
