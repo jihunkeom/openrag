@@ -7,10 +7,16 @@ src_path = os.path.join(repo_root, "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-from utils.document_processing import create_document_converter
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+from utils.document_processing import is_docling_available
+
+if not is_docling_available():
+    logger.info("Docling not installed, skipping warm-up")
+    sys.exit(0)
+
+from utils.document_processing import create_document_converter
 
 logger.info("Warming up docling models")
 

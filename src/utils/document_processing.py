@@ -11,6 +11,27 @@ logger = get_logger(__name__)
 # Global converter cache for worker processes
 _worker_converter = None
 
+DOCLING_NOT_INSTALLED_MESSAGE = (
+    "Docling is not installed. Install with: pip install openrag[docling] "
+    "or use Langflow for ingestion (default)."
+)
+
+
+class DoclingNotInstalledError(ImportError):
+    """Raised when docling-based processing is used but the docling extra is not installed."""
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or DOCLING_NOT_INSTALLED_MESSAGE)
+
+
+def is_docling_available() -> bool:
+    """Return True if the docling package can be imported (openrag[docling] installed)."""
+    try:
+        from docling.document_converter import DocumentConverter  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
 
 def create_document_converter(ocr_engine: str | None = None):
     """Create a Docling DocumentConverter with OCR disabled unless requested."""
@@ -24,13 +45,17 @@ def create_document_converter(ocr_engine: str | None = None):
             PdfFormatOption,
         )
         from docling.datamodel.pipeline_options import PdfPipelineOptions
+    except ImportError:
+        raise DoclingNotInstalledError()
     except Exception as exc:  # pragma: no cover - fallback path
         logger.debug(
             "Falling back to default DocumentConverter import",
             error=str(exc),
         )
-        from docling.document_converter import DocumentConverter  # type: ignore
-
+        try:
+            from docling.document_converter import DocumentConverter  # type: ignore
+        except ImportError:
+            raise DoclingNotInstalledError()
         return DocumentConverter()
 
     pipeline_options = PdfPipelineOptions()
@@ -84,8 +109,9 @@ def create_document_converter(ocr_engine: str | None = None):
 def get_worker_converter():
     """Get or create a DocumentConverter instance for this worker process"""
     global _worker_converter
+    if not is_docling_available():
+        raise DoclingNotInstalledError()
     if _worker_converter is None:
-        
         # Configure GPU settings for this worker
         has_gpu_devices, _ = detect_gpu_devices()
         if not has_gpu_devices:

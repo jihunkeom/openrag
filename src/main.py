@@ -1588,6 +1588,17 @@ async def create_app():
     app.state.services = services  # Store services for cleanup
     app.state.background_tasks = set()
 
+    # Return 503 when docling is required but openrag[docling] is not installed
+    from utils.document_processing import DoclingNotInstalledError
+
+    async def docling_not_installed_handler(request, exc):
+        return JSONResponse(
+            {"error": str(exc), "detail": "Install openrag[docling] or use Langflow for ingestion."},
+            status_code=503,
+        )
+
+    app.add_exception_handler(DoclingNotInstalledError, docling_not_installed_handler)
+
     # Add startup event handler
     @app.on_event("startup")
     async def startup_event():

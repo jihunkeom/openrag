@@ -35,6 +35,13 @@ async def upload(request: Request, document_service, session_manager):
         )
         return JSONResponse(result, status_code=201)  # Created
     except Exception as e:
+        from utils.document_processing import DoclingNotInstalledError
+
+        if isinstance(e, DoclingNotInstalledError):
+            return JSONResponse(
+                {"error": str(e), "detail": "Install openrag[docling] or use Langflow for ingestion."},
+                status_code=503,
+            )
         error_msg = str(e)
         if (
             "AuthenticationException" in error_msg
@@ -109,7 +116,17 @@ async def upload_context(
 
     jwt_token = session_manager.get_effective_jwt_token(user_id, request.state.jwt_token)
     # Process document and extract content
-    doc_result = await document_service.process_upload_context(upload_file, filename)
+    try:
+        doc_result = await document_service.process_upload_context(upload_file, filename)
+    except Exception as e:
+        from utils.document_processing import DoclingNotInstalledError
+
+        if isinstance(e, DoclingNotInstalledError):
+            return JSONResponse(
+                {"error": str(e), "detail": "Install openrag[docling] for PDF/image context or use .txt files."},
+                status_code=503,
+            )
+        raise
 
     # Send document content as user message to get proper response_id
     response_text, response_id = await chat_service.upload_context_chat(

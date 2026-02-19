@@ -4,7 +4,6 @@ import tempfile
 import os
 import aiofiles
 from io import BytesIO
-from docling_core.types.io import DocumentStream
 from typing import List
 import openai
 import tiktoken
@@ -210,7 +209,16 @@ class DocumentService:
                 "content_length": len(text_content),
             }
         else:
-            # Create DocumentStream and process with docling
+            # Create DocumentStream and process with docling (requires openrag[docling])
+            from utils.document_processing import is_docling_available
+
+            if not is_docling_available():
+                from utils.document_processing import DoclingNotInstalledError
+                raise DoclingNotInstalledError(
+                    "Docling is not installed. Install openrag[docling] for PDF/image context uploads or use .txt files."
+                )
+            from docling_core.types.io import DocumentStream
+
             doc_stream = DocumentStream(name=filename, stream=content)
             result = clients.converter.convert(doc_stream)
             full_doc = result.document.export_to_dict()

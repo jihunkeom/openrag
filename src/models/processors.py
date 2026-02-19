@@ -217,7 +217,16 @@ class TaskProcessor:
             if original_filename:
                 slim_doc["filename"] = original_filename
         else:
-            # Convert and extract using docling for other file types
+            # Convert and extract using docling for other file types (requires openrag[docling])
+            from utils.document_processing import (
+                DoclingNotInstalledError,
+                is_docling_available,
+            )
+
+            if not is_docling_available():
+                raise DoclingNotInstalledError(
+                    "Local ingestion requires openrag[docling]. Use Langflow ingestion or install the docling extra."
+                )
             result = clients.converter.convert(file_path)
             full_doc = result.document.export_to_dict()
             slim_doc = extract_relevant(full_doc)
