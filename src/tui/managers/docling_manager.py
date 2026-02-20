@@ -97,7 +97,7 @@ class DoclingManager:
         except OSError:
             return False
 
-def _recover_from_pid_file(self) -> None:
+    def _recover_from_pid_file(self) -> None:
         """Try to recover connection to existing docling-serve process from PID file."""
         pid = self._load_pid()
         if pid is not None:
