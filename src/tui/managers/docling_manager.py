@@ -97,15 +97,7 @@ class DoclingManager:
         except OSError:
             return False
 
-    def _is_docling_serve_available(self) -> bool:
-        """Return True if the docling_serve package is installed (optional extra)."""
-        try:
-            import docling_serve  # noqa: F401
-            return True
-        except ImportError:
-            return False
-
-    def _recover_from_pid_file(self) -> None:
+def _recover_from_pid_file(self) -> None:
         """Try to recover connection to existing docling-serve process from PID file."""
         pid = self._load_pid()
         if pid is not None:
@@ -264,10 +256,6 @@ class DoclingManager:
         # Clear log buffer when starting
         self._log_buffer = []
         self._add_log_entry("Starting docling serve as external process...")
-
-        if not self._is_docling_serve_available():
-            self._starting = False
-            return False, "docling-serve not installed. Install with: uv sync --extra docling-serve"
 
         try:
             # Build command to run docling-serve via uvx (avoids bundling the massive dependency)
