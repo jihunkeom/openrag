@@ -217,11 +217,9 @@ class TaskProcessor:
             if original_filename:
                 slim_doc["filename"] = original_filename
         else:
-            from utils.document_processing import require_docling
+            from utils.docling_client import convert_file
 
-            require_docling()
-            result = clients.converter.convert(file_path)
-            full_doc = result.document.export_to_dict()
+            full_doc = await convert_file(file_path, httpx_client=clients.docling_http_client)
             slim_doc = extract_relevant(full_doc)
 
         texts = [c["text"] for c in slim_doc["chunks"]]
@@ -626,8 +624,6 @@ class S3FileProcessor(TaskProcessor):
         import datetime
         from config.settings import clients, get_embedding_model, get_index_name
         from services.document_service import chunk_texts_for_embeddings
-        from utils.document_processing import process_document_sync
-
         file_task.status = TaskStatus.RUNNING
         file_task.updated_at = time.time()
 

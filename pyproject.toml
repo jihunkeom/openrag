@@ -32,15 +32,6 @@ dependencies = [
     "zxcvbn>=4.5.0"
 ]
 
-[project.optional-dependencies]
-torch = ["torch>=2.7.1"]
-docling = [
-    "docling[vlm]==2.41.0; sys_platform != 'darwin'",
-    "docling[ocrmac,vlm]==2.41.0; sys_platform == 'darwin'",
-    "docling-core==2.48.1",
-    "easyocr>=1.7.1; sys_platform != 'darwin'",
-]
-
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.21.0", "pytest-mock>=3.12.0", "pytest-cov>=4.0.0"]
 
@@ -51,15 +42,3 @@ openrag = "tui.main:run_tui"
 package = true
 
 
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
-]
-torchvision = [
-  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
-]
-
-[[tool.uv.index]]
-name     = "pytorch-cu128"
-url      = "https://download.pytorch.org/whl/cu128"
-explicit = true
