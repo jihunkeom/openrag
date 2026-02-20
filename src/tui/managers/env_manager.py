@@ -111,6 +111,7 @@ class EnvManager:
                     import shutil
                     self.env_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(legacy_env, self.env_file)
+                    os.chmod(self.env_file, 0o600)
                     logger.info(f"Migrated .env from {legacy_env} to {self.env_file}")
 
 
@@ -375,6 +376,7 @@ class EnvManager:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_file = self.env_file.with_suffix(f".env.backup.{timestamp}")
                 self.env_file.rename(backup_file)
+                os.chmod(backup_file, 0o600)
 
             # Create .env file with secure permissions (owner read/write only) to protect secrets
             fd = os.open(self.env_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
