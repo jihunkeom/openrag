@@ -472,9 +472,9 @@ function SearchPage() {
       <DeleteConfirmationDialog
         open={showBulkDeleteDialog}
         onOpenChange={setShowBulkDeleteDialog}
-        title={selectedRows.length > 1 ? "Delete Documents" : "Delete Document"}
+        title={selectedRows.length > 1 ? "Delete documents" : "Delete document"}
         description={`Are you sure you want to delete ${selectedRows.length} document${selectedRows.length > 1 ? "s" : ""}?`}
-        confirmText={selectedRows.length > 1 ? "Delete All" : "Delete"}
+        confirmText={selectedRows.length > 1 ? "Delete all" : "Delete"}
         onConfirm={handleBulkDelete}
         isLoading={deleteDocumentMutation.isPending}
       >
