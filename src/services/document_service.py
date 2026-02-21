@@ -170,10 +170,10 @@ class DocumentService:
             content.write(chunk)
         content.seek(0)  # Reset to beginning for reading
 
-        # Check if this is a .txt file - use simple processing
+        # Check if this is a .txt or .md file - use simple processing
         file_ext = os.path.splitext(filename)[1].lower()
         
-        if file_ext == '.txt':
+        if file_ext in ('.txt', '.md'):
             # Simple text file processing for chat context
             text_content = content.read().decode('utf-8', errors='replace')
             
