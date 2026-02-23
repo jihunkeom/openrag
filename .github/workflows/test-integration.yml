@@ -77,7 +77,7 @@ jobs:
         run: uv sync
 
       - name: Install system dependencies for docling-serve
-        run: sudo apt-get update && sudo apt-get install -y libgl1
+        run: apt-get update && apt-get install -y libgl1
 
       - name: Run integration tests
         env:
