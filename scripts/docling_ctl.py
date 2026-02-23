@@ -42,7 +42,9 @@ async def start_docling(
         print(f"PID: {status['pid']}")
         return 0
     else:
-        print(f"{message}", file=sys.stderr)
+        print(f"ERROR: {message}", file=sys.stderr)
+        for entry in manager._log_buffer:
+            print(f"  [docling-log] {entry}", file=sys.stderr)
         return 1
 
 
