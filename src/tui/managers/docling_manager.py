@@ -230,6 +230,7 @@ class DoclingManager:
     ) -> Tuple[bool, str]:
         """Start docling serve as external process.
 
+        
         Args:
             port: Port to listen on (default: 5001)
             host: Host to bind to (default: from env or 0.0.0.0)
@@ -272,53 +273,20 @@ class DoclingManager:
         self._add_log_entry("Starting docling serve as external process...")
 
         try:
-            # Build command to run docling-serve via uvx (avoids bundling the massive dependency)
-            import shutil
-
             ocr_pkg = "ocrmac" if sys.platform == "darwin" else "easyocr"
-            if shutil.which("uvx"):
-                cmd = [
-                    "uvx",
-                    "--with",
-                    ocr_pkg,
-                    "docling-serve==1.5.0",
-                    "run",
-                    "--host",
-                    self._host,
-                    "--port",
-                    str(self._port),
-                    "--workers",
-                    str(self._workers),
-                ]
-            elif shutil.which("uv"):
-                cmd = [
-                    "uv",
-                    "tool",
-                    "run",
-                    "--with",
-                    ocr_pkg,
-                    "docling-serve==1.5.0",
-                    "run",
-                    "--host",
-                    self._host,
-                    "--port",
-                    str(self._port),
-                    "--workers",
-                    str(self._workers),
-                ]
-            else:
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "docling_serve",
-                    "run",
-                    "--host",
-                    self._host,
-                    "--port",
-                    str(self._port),
-                    "--workers",
-                    str(self._workers),
-                ]
+            cmd = [
+                "uvx",
+                "--with",
+                ocr_pkg,
+                "docling-serve==1.5.0",
+                "run",
+                "--host",
+                self._host,
+                "--port",
+                str(self._port),
+                "--workers",
+                str(self._workers),
+            ]
 
             if enable_ui:
                 cmd.append("--enable-ui")
