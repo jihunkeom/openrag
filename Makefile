@@ -635,7 +635,7 @@ test-ci: ## Start infra, run integration + SDK tests, tear down (uses DockerHub 
 	$(COMPOSE_CMD) up -d opensearch dashboards langflow openrag-backend openrag-frontend; \
 	echo "$(CYAN)Architecture: $$(uname -m), Platform: $$(uname -s)$(NC)"; \
 	echo "$(YELLOW)Starting docling-serve...$(NC)"; \
-	DOCLING_START_OUTPUT=$$(uv run python scripts/docling_ctl.py start --port 5001 2>&1); \
+	DOCLING_START_OUTPUT=$$(uv run python scripts/docling_ctl.py start --port 5001 --timeout 180 2>&1); \
 	echo "$$DOCLING_START_OUTPUT"; \
 	DOCLING_ENDPOINT=$$(echo "$$DOCLING_START_OUTPUT" | grep "Endpoint:" | awk '{print $$2}'); \
 	if [ -z "$$DOCLING_ENDPOINT" ]; then \
@@ -677,10 +677,13 @@ test-ci: ## Start infra, run integration + SDK tests, tear down (uses DockerHub 
 		curl -s $${DOCLING_ENDPOINT}/health >/dev/null 2>&1 && break || sleep 2; \
 	done; \
 	if ! curl -s $${DOCLING_ENDPOINT}/health >/dev/null 2>&1; then \
-		echo "$(RED)ERROR: docling-serve is not healthy at $$DOCLING_ENDPOINT after 120s$(NC)"; \
+		echo "$(RED)ERROR: docling-serve is not healthy at $$DOCLING_ENDPOINT after waiting$(NC)"; \
 		echo "$(YELLOW)Docling status:$(NC)"; \
 		uv run python scripts/docling_ctl.py status 2>&1 || true; \
-		echo "$(RED)Integration tests that depend on docling will fail.$(NC)"; \
+		echo "$(RED)Aborting: docling-serve is required for integration tests.$(NC)"; \
+		uv run python scripts/docling_ctl.py stop || true; \
+		$(COMPOSE_CMD) down -v 2>/dev/null || true; \
+		exit 1; \
 	fi; \
 	echo "$(PURPLE)Running integration tests$(NC)"; \
 	LOG_LEVEL=$${LOG_LEVEL:-DEBUG} \
@@ -737,7 +740,7 @@ test-ci-local: ## Same as test-ci but builds all images locally
 	$(COMPOSE_CMD) up -d opensearch dashboards langflow openrag-backend openrag-frontend; \
 	echo "$(CYAN)Architecture: $$(uname -m), Platform: $$(uname -s)$(NC)"; \
 	echo "$(YELLOW)Starting docling-serve...$(NC)"; \
-	DOCLING_START_OUTPUT=$$(uv run python scripts/docling_ctl.py start --port 5001 2>&1); \
+	DOCLING_START_OUTPUT=$$(uv run python scripts/docling_ctl.py start --port 5001 --timeout 180 2>&1); \
 	echo "$$DOCLING_START_OUTPUT"; \
 	DOCLING_ENDPOINT=$$(echo "$$DOCLING_START_OUTPUT" | grep "Endpoint:" | awk '{print $$2}'); \
 	if [ -z "$$DOCLING_ENDPOINT" ]; then \
@@ -779,10 +782,13 @@ test-ci-local: ## Same as test-ci but builds all images locally
 		curl -s $${DOCLING_ENDPOINT}/health >/dev/null 2>&1 && break || sleep 2; \
 	done; \
 	if ! curl -s $${DOCLING_ENDPOINT}/health >/dev/null 2>&1; then \
-		echo "$(RED)ERROR: docling-serve is not healthy at $$DOCLING_ENDPOINT after 120s$(NC)"; \
+		echo "$(RED)ERROR: docling-serve is not healthy at $$DOCLING_ENDPOINT after waiting$(NC)"; \
 		echo "$(YELLOW)Docling status:$(NC)"; \
 		uv run python scripts/docling_ctl.py status 2>&1 || true; \
-		echo "$(RED)Integration tests that depend on docling will fail.$(NC)"; \
+		echo "$(RED)Aborting: docling-serve is required for integration tests.$(NC)"; \
+		uv run python scripts/docling_ctl.py stop || true; \
+		$(COMPOSE_CMD) down -v 2>/dev/null || true; \
+		exit 1; \
 	fi; \
 	echo "$(PURPLE)Running integration tests$(NC)"; \
 	LOG_LEVEL=$${LOG_LEVEL:-DEBUG} \
