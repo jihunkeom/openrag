@@ -278,6 +278,8 @@ class DoclingManager:
                 "uvx",
                 "--with",
                 ocr_pkg,
+                "--with",
+                "opencv-python-headless",
                 "docling-serve==1.5.0",
                 "run",
                 "--host",

@@ -76,9 +76,6 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Install system dependencies for docling-serve
-        run: apt-get update && apt-get install -y libgl1
-
       - name: Run integration tests
         env:
           OPENSEARCH_HOST: localhost
