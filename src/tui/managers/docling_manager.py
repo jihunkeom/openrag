@@ -4,6 +4,7 @@ import asyncio
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from typing import Optional, Tuple, Dict, Any, List, AsyncIterator
@@ -272,14 +273,30 @@ class DoclingManager:
         self._log_buffer = []
         self._add_log_entry("Starting docling serve as external process...")
 
+        # On Linux, opencv-python requires libGL.so.1 which may be absent on
+        # headless CI runners.  We use opencv-python-headless instead.  A uv
+        # override file is needed to *replace* (not merely supplement)
+        # opencv-python, because docling-ibm-models hard-depends on it and
+        # the resolver would install both packages otherwise.
+        override_path: Optional[str] = None
+        if sys.platform != "darwin":
+            fd, override_path = tempfile.mkstemp(
+                suffix=".txt", prefix="docling_cv_override_"
+            )
+            with os.fdopen(fd, "w") as f:
+                f.write('opencv-python ; python_version < "0"\n')
+
         try:
             ocr_pkg = "ocrmac" if sys.platform == "darwin" else "easyocr"
+
             cmd = [
                 "uvx",
                 "--with",
                 ocr_pkg,
-                "--with",
-                "opencv-python-headless",
+            ]
+            if override_path:
+                cmd += ["--override", override_path, "--with", "opencv-python-headless"]
+            cmd += [
                 "docling-serve==1.5.0",
                 "run",
                 "--host",
@@ -346,7 +363,13 @@ class DoclingManager:
                 if (i + 1) % 10 == 0:
                     self._add_log_entry(f"Waiting for startup... ({i + 1}/{timeout}s)")
 
-            # Add a test message to verify logging is working
+            # Override file is no longer needed after uv resolution
+            if override_path:
+                try:
+                    os.unlink(override_path)
+                except OSError:
+                    pass
+
             self._add_log_entry(
                 f"Process PID: {self._process.pid}, Poll: {self._process.poll()}"
             )
@@ -391,6 +414,11 @@ class DoclingManager:
 
         except FileNotFoundError:
             self._starting = False
+            if override_path:
+                try:
+                    os.unlink(override_path)
+                except OSError:
+                    pass
             return (
                 False,
                 "docling-serve not available. Please install uv: https://docs.astral.sh/uv/",
@@ -399,6 +427,11 @@ class DoclingManager:
             self._running = False
             self._process = None
             self._starting = False
+            if override_path:
+                try:
+                    os.unlink(override_path)
+                except OSError:
+                    pass
             return False, f"Error starting docling serve: {str(e)}"
 
     def _start_output_capture(self):
