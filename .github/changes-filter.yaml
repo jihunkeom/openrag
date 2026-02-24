@@ -7,8 +7,6 @@ python:
 
 frontend:
   - "frontend/**"
-  - "frontend/package.json"
-  - "frontend/package-lock.json"
 
 docs:
   - "docs/**"
