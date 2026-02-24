@@ -2,7 +2,7 @@ name: Manage Review Labels
 
 on:
   pull_request_review:
-    types: [submitted]
+    types: [submitted, dismissed]
 
 jobs:
   label-on-review:
@@ -49,7 +49,7 @@ jobs:
               } else {
                 console.log(`${LGTM_LABEL} label already exists`);
               }
-            } else if (reviewState === 'changes_requested') {
+            } else if (reviewState === 'changes_requested' || reviewState === 'dismissed') {
               const lgtmExists = await hasLgtmLabel();
 
               if (lgtmExists) {
