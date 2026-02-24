@@ -74,6 +74,9 @@ async def upload_path(request: Request, task_service, session_manager):
         owner_name = user.name
         owner_email = user.email
 
+    from .documents import _ensure_index_exists
+    await _ensure_index_exists()
+
     task_id = await task_service.create_upload_task(
         owner_user_id,
         file_paths,
@@ -107,7 +110,6 @@ async def upload_context(
     jwt_token = session_manager.get_effective_jwt_token(user_id, request.state.jwt_token)
     # Process document and extract content
     doc_result = await document_service.process_upload_context(upload_file, filename)
-
     # Send document content as user message to get proper response_id
     response_text, response_id = await chat_service.upload_context_chat(
         doc_result["content"],
@@ -184,6 +186,9 @@ async def upload_bucket(request: Request, task_service, session_manager):
         owner_name = user.name
         owner_email = user.email
         task_user_id = user.user_id
+
+    from .documents import _ensure_index_exists
+    await _ensure_index_exists()
 
     processor = S3FileProcessor(
         task_service.document_service,

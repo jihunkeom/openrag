@@ -15,7 +15,6 @@ logger = get_logger(__name__)
 import asyncio
 import atexit
 import mimetypes
-import multiprocessing
 import os
 import shutil
 import subprocess
@@ -24,13 +23,6 @@ from functools import partial
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.responses import JSONResponse
-
-# Set multiprocessing start method to 'spawn' for CUDA compatibility
-multiprocessing.set_start_method("spawn", force=True)
-
-# Create process pool FIRST, before any torch/CUDA imports
-from utils.process_pool import process_pool  # isort: skip
-import torch
 
 # API endpoints
 from api import (
@@ -61,7 +53,7 @@ from auth_middleware import optional_auth, require_auth
 from api_key_middleware import require_api_key
 from services.api_key_service import APIKeyService
 from api import keys as api_keys
-from api.v1 import chat as v1_chat, search as v1_search, documents as v1_documents, settings as v1_settings, knowledge_filters as v1_knowledge_filters
+from api.v1 import chat as v1_chat, search as v1_search, documents as v1_documents, settings as v1_settings, models as v1_models, knowledge_filters as v1_knowledge_filters
 
 # Configuration and setup
 from config.settings import (
@@ -93,12 +85,6 @@ from services.monitor_service import MonitorService
 from services.search_service import SearchService
 from services.task_service import TaskService
 from session_manager import SessionManager
-
-logger.info(
-    "CUDA device information",
-    cuda_available=torch.cuda.is_available(),
-    cuda_version=torch.version.cuda,
-)
 
 # Files to exclude from startup ingestion
 EXCLUDED_INGESTION_FILES = {"warmup_ocr.pdf"}
@@ -185,91 +171,108 @@ async def _ensure_opensearch_index():
 
 async def init_index():
     """Initialize OpenSearch index and security roles"""
-    await wait_for_opensearch()
+    try:
+        await wait_for_opensearch()
 
-    # Get the configured embedding model from user configuration
-    config = get_openrag_config()
-    embedding_model = config.knowledge.embedding_model
-    embedding_provider = config.knowledge.embedding_provider
-    embedding_provider_config = config.get_embedding_provider_config()
+        # Get the configured embedding model from user configuration
+        config = get_openrag_config()
+        embedding_model = config.knowledge.embedding_model
+        embedding_provider = config.knowledge.embedding_provider
+        embedding_provider_config = config.get_embedding_provider_config()
 
-    # Create dynamic index body based on the configured embedding model
-    # Pass provider and endpoint for dynamic dimension resolution (Ollama probing)
-    dynamic_index_body = await create_dynamic_index_body(
-        embedding_model,
-        provider=embedding_provider,
-        endpoint=getattr(embedding_provider_config, "endpoint", None)
-    )
-
-    # Create documents index
-    index_name = get_index_name()
-    if not await clients.opensearch.indices.exists(index=index_name):
-        await clients.opensearch.indices.create(
-            index=index_name, body=dynamic_index_body
+        # Create dynamic index body based on the configured embedding model
+        # Pass provider and endpoint for dynamic dimension resolution (Ollama probing)
+        dynamic_index_body = await create_dynamic_index_body(
+            embedding_model,
+            provider=embedding_provider,
+            endpoint=getattr(embedding_provider_config, "endpoint", None)
         )
-        logger.info(
-            "Created OpenSearch index",
-            index_name=index_name,
-            embedding_model=embedding_model,
-        )
-        await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_INDEX_CREATED)
-    else:
-        logger.info(
-            "Index already exists, skipping creation",
-            index_name=index_name,
-            embedding_model=embedding_model,
-        )
-        await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_INDEX_EXISTS)
 
-    # Create knowledge filters index
-    knowledge_filter_index_name = "knowledge_filters"
-    knowledge_filter_index_body = {
-        "mappings": {
-            "properties": {
-                "id": {"type": "keyword"},
-                "name": {"type": "text", "analyzer": "standard"},
-                "description": {"type": "text", "analyzer": "standard"},
-                "query_data": {"type": "text"},  # Store as text for searching
-                "owner": {"type": "keyword"},
-                "allowed_users": {"type": "keyword"},
-                "allowed_groups": {"type": "keyword"},
-                "subscriptions": {"type": "object"},  # Store subscription data
-                "created_at": {"type": "date"},
-                "updated_at": {"type": "date"},
+        # Create documents index
+        index_name = get_index_name()
+        if not await clients.opensearch.indices.exists(index=index_name):
+            await clients.opensearch.indices.create(
+                index=index_name, body=dynamic_index_body
+            )
+            logger.info(
+                "Created OpenSearch index",
+                index_name=index_name,
+                embedding_model=embedding_model,
+            )
+            await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_INDEX_CREATED)
+        else:
+            logger.info(
+                "Index already exists, skipping creation",
+                index_name=index_name,
+                embedding_model=embedding_model,
+            )
+            await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_INDEX_EXISTS)
+
+        # Create knowledge filters index
+        knowledge_filter_index_name = "knowledge_filters"
+        knowledge_filter_index_body = {
+            "mappings": {
+                "properties": {
+                    "id": {"type": "keyword"},
+                    "name": {"type": "text", "analyzer": "standard"},
+                    "description": {"type": "text", "analyzer": "standard"},
+                    "query_data": {"type": "text"},  # Store as text for searching
+                    "owner": {"type": "keyword"},
+                    "allowed_users": {"type": "keyword"},
+                    "allowed_groups": {"type": "keyword"},
+                    "subscriptions": {"type": "object"},  # Store subscription data
+                    "created_at": {"type": "date"},
+                    "updated_at": {"type": "date"},
+                }
             }
         }
-    }
 
-    if not await clients.opensearch.indices.exists(index=knowledge_filter_index_name):
-        await clients.opensearch.indices.create(
-            index=knowledge_filter_index_name, body=knowledge_filter_index_body
-        )
-        logger.info(
-            "Created knowledge filters index", index_name=knowledge_filter_index_name
-        )
-        await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_KF_INDEX_CREATED)
-    else:
-        logger.info(
-            "Knowledge filters index already exists, skipping creation",
-            index_name=knowledge_filter_index_name,
-        )
+        if not await clients.opensearch.indices.exists(index=knowledge_filter_index_name):
+            await clients.opensearch.indices.create(
+                index=knowledge_filter_index_name, body=knowledge_filter_index_body
+            )
+            logger.info(
+                "Created knowledge filters index", index_name=knowledge_filter_index_name
+            )
+            await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_KF_INDEX_CREATED)
+        else:
+            logger.info(
+                "Knowledge filters index already exists, skipping creation",
+                index_name=knowledge_filter_index_name,
+            )
 
-    # Create API keys index for public API authentication
-    if not await clients.opensearch.indices.exists(index=API_KEYS_INDEX_NAME):
-        await clients.opensearch.indices.create(
-            index=API_KEYS_INDEX_NAME, body=API_KEYS_INDEX_BODY
-        )
-        logger.info(
-            "Created API keys index", index_name=API_KEYS_INDEX_NAME
-        )
-    else:
-        logger.info(
-            "API keys index already exists, skipping creation",
-            index_name=API_KEYS_INDEX_NAME,
-        )
+        # Create API keys index for public API authentication
+        if not await clients.opensearch.indices.exists(index=API_KEYS_INDEX_NAME):
+            await clients.opensearch.indices.create(
+                index=API_KEYS_INDEX_NAME, body=API_KEYS_INDEX_BODY
+            )
+            logger.info(
+                "Created API keys index", index_name=API_KEYS_INDEX_NAME
+            )
+        else:
+            logger.info(
+                "API keys index already exists, skipping creation",
+                index_name=API_KEYS_INDEX_NAME,
+            )
 
-    # Configure alerting plugin security settings
-    await configure_alerting_security()
+        # Configure alerting plugin security settings
+        await configure_alerting_security()
+
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "disk usage exceeded" in error_msg or "flood-stage watermark" in error_msg:
+             logger.error("OpenSearch disk usage exceeded flood-stage watermark. Index creation failed.")
+             raise Exception(
+                 "OpenSearch disk space is full (flood-stage watermark exceeded). "
+                 "Please free up disk space on your Docker volume or host machine to continue."
+             ) from e
+        raise e
+
+
+async def init_index_when_ready():
+    """Wait for the OpenSearch service to be ready and then initialize the OpenSearch index."""
+    await wait_for_opensearch()
+    await init_index()
 
 
 def generate_jwt_keys():
@@ -327,19 +330,6 @@ def generate_jwt_keys():
             logger.warning("Failed to set permissions on existing keys", error=str(e))
 
 
-async def init_index_when_ready():
-    """Initialize OpenSearch index when it becomes available"""
-    try:
-        await init_index()
-        logger.info("OpenSearch index initialization completed successfully")
-    except Exception as e:
-        logger.error("OpenSearch index initialization failed", error=str(e))
-        await TelemetryClient.send_event(Category.OPENSEARCH_INDEX, MessageId.ORB_OS_INDEX_INIT_FAIL)
-        logger.warning(
-            "OIDC endpoints will still work, but document operations may fail until OpenSearch is ready"
-        )
-
-
 def _get_documents_dir():
     """Get the documents directory path, handling both Docker and local environments."""
     # In Docker, the volume is mounted at /app/openrag-documents
@@ -365,11 +355,7 @@ async def ingest_default_documents_when_ready(services):
         await TelemetryClient.send_event(Category.DOCUMENT_INGESTION, MessageId.ORB_DOC_DEFAULT_START)
         base_dir = _get_documents_dir()
         if not os.path.isdir(base_dir):
-            logger.info(
-                "Default documents directory not found; skipping ingestion",
-                base_dir=base_dir,
-            )
-            return
+            raise FileNotFoundError(f"Default documents directory not found: {base_dir}")
 
         # Collect files recursively, excluding warmup files
         file_paths = [
@@ -380,10 +366,7 @@ async def ingest_default_documents_when_ready(services):
         ]
 
         if not file_paths:
-            logger.info(
-                "No default documents found; nothing to ingest", base_dir=base_dir
-            )
-            return
+            raise FileNotFoundError(f"No default documents found in {base_dir}")
 
         if DISABLE_INGEST_WITH_LANGFLOW:
             await _ingest_default_documents_openrag(services, file_paths)
@@ -395,6 +378,7 @@ async def ingest_default_documents_when_ready(services):
     except Exception as e:
         logger.error("Default documents ingestion failed", error=str(e))
         await TelemetryClient.send_event(Category.DOCUMENT_INGESTION, MessageId.ORB_DOC_DEFAULT_FAILED)
+        raise
 
 
 async def _ingest_default_documents_langflow(services, file_paths):
@@ -575,6 +559,33 @@ async def startup_tasks(services):
     if DISABLE_INGEST_WITH_LANGFLOW:
         await _ensure_opensearch_index()
 
+    # Ensure that the OpenSearch index exists if onboarding was already completed
+    # - Handles the case where OpenSearch is reset (e.g., volume deleted) after onboarding
+    embedding_model = None
+    try:
+        config = get_openrag_config()
+        embedding_model = config.knowledge.embedding_model
+
+        if config.edited and embedding_model:
+            logger.info(
+                "Ensuring that the OpenSearch index exists (after onboarding)...",
+                embedding_model=embedding_model,
+            )
+
+            await init_index()
+
+            logger.info(
+                "Successfully ensured that the OpenSearch index exists (after onboarding).",
+                embedding_model=embedding_model,
+            )
+    except Exception as e:
+        logger.error(
+            "Failed to ensure that the OpenSearch index exists (after onboarding).",
+            embedding_model=embedding_model,
+            error=str(e),
+        )
+        raise
+
     # Configure alerting security
     await configure_alerting_security()
 
@@ -628,17 +639,12 @@ async def initialize_services():
     # Initialize services
     document_service = DocumentService(session_manager=session_manager)
     search_service = SearchService(session_manager)
-    task_service = TaskService(document_service, process_pool, ingestion_timeout=INGESTION_TIMEOUT)
+    task_service = TaskService(document_service, ingestion_timeout=INGESTION_TIMEOUT)
     chat_service = ChatService()
     flows_service = FlowsService()
     knowledge_filter_service = KnowledgeFilterService(session_manager)
     models_service = ModelsService()
     monitor_service = MonitorService(session_manager)
-
-    # Set process pool for document service
-    document_service.process_pool = process_pool
-
-    # Initialize connector service
 
     # Initialize both connector services
     langflow_connector_service = LangflowConnectorService(
@@ -646,8 +652,7 @@ async def initialize_services():
         session_manager=session_manager,
     )
     openrag_connector_service = ConnectorService(
-        patched_async_client=clients,  # Pass the clients object itself
-        process_pool=process_pool,
+        patched_async_client=clients,
         embed_model=get_embedding_model(),
         index_name=get_index_name(),
         task_service=task_service,
@@ -1490,6 +1495,16 @@ async def create_app():
                 )
             ),
             methods=["POST"],
+        ),
+        Route(
+            "/v1/models/{provider}",
+            require_api_key(services["api_key_service"])(
+                partial(
+                    v1_models.list_models_endpoint,
+                    models_service=services["models_service"],
+                )
+            ),
+            methods=["GET"],
         ),
         # Knowledge filters endpoints
         Route(
