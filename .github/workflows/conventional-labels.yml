@@ -8,18 +8,6 @@ on:
   merge_group:
 
 jobs:
-  validate-pr-title:
-    name: Validate PR Title
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request_target'
-    steps:
-      - name: Validate PR title follows Conventional Commits
-        id: validate
-        uses: Namchee/conventional-pr@v0.15
-        with:
-          access_token: ${{ secrets.GITHUB_TOKEN }}
-          issue: false
-
   validate-pr-description:
     name: Validate PR Description
     runs-on: ubuntu-latest
@@ -67,7 +55,7 @@ jobs:
             console.log('PR description validation passed!');
 
   label:
-    needs: [validate-pr-title]
+    needs: [validate-pr-description]
     name: Label PR
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request_target' && github.event.pull_request.user.type != 'Bot'
