@@ -110,7 +110,6 @@ async def upload_context(
     jwt_token = session_manager.get_effective_jwt_token(user_id, request.state.jwt_token)
     # Process document and extract content
     doc_result = await document_service.process_upload_context(upload_file, filename)
-
     # Send document content as user message to get proper response_id
     response_text, response_id = await chat_service.upload_context_chat(
         doc_result["content"],
