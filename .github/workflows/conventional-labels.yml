@@ -11,6 +11,7 @@ jobs:
   validate-pr-title:
     name: Validate PR Title
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target'
     steps:
       - name: Validate PR title follows Conventional Commits
         id: validate
@@ -22,6 +23,7 @@ jobs:
   validate-pr-description:
     name: Validate PR Description
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target'
     permissions:
       pull-requests: read
     steps:
@@ -68,7 +70,7 @@ jobs:
     needs: [validate-pr-title]
     name: Label PR
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.user.type != 'Bot' }}
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.user.type != 'Bot'
     steps:
       - uses: bcoe/conventional-release-labels@v1
         with:
